@@ -1,0 +1,80 @@
+{
+  "comment": "CloudWatch dashboard for the Customer 360 platform. Deployed via 'aws cloudwatch put-dashboard --dashboard-name customer360-prod --dashboard-body file://cloudwatch_dashboard.json' (or a Terraform aws_cloudwatch_dashboard resource referencing this file).",
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0, "y": 0, "width": 12, "height": 6,
+      "properties": {
+        "title": "Step Functions: Executions Succeeded vs Failed",
+        "metrics": [
+          ["AWS/States", "ExecutionsSucceeded", "StateMachineArn", "${state_machine_arn}"],
+          ["AWS/States", "ExecutionsFailed", "StateMachineArn", "${state_machine_arn}"]
+        ],
+        "period": 86400,
+        "stat": "Sum",
+        "region": "af-south-1"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12, "y": 0, "width": 12, "height": 6,
+      "properties": {
+        "title": "Kinesis Consumer Lag (Iterator Age)",
+        "metrics": [
+          ["AWS/Kinesis", "GetRecords.IteratorAgeMilliseconds", "StreamName", "${kinesis_stream_name}"]
+        ],
+        "period": 300,
+        "stat": "Maximum",
+        "region": "af-south-1",
+        "annotations": {
+          "horizontal": [{ "label": "60s SLA", "value": 60000 }]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0, "y": 6, "width": 12, "height": 6,
+      "properties": {
+        "title": "Lambda Invocations & Errors",
+        "metrics": [
+          ["AWS/Lambda", "Invocations", "FunctionName", "customer360-prod-clickstream-processor"],
+          ["AWS/Lambda", "Errors", "FunctionName", "customer360-prod-clickstream-processor"]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "af-south-1"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12, "y": 6, "width": 12, "height": 6,
+      "properties": {
+        "title": "Redshift Serverless Compute Capacity (RPUs)",
+        "metrics": [
+          ["AWS/Redshift-Serverless", "ComputeCapacity", "Namespace", "customer360-prod-ns"]
+        ],
+        "period": 900,
+        "stat": "Maximum",
+        "region": "af-south-1",
+        "annotations": {
+          "horizontal": [{ "label": "base_capacity", "value": 16 }]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0, "y": 12, "width": 24, "height": 6,
+      "properties": {
+        "title": "S3 Bucket Size by Storage Class (cost optimization tracking)",
+        "metrics": [
+          ["AWS/S3", "BucketSizeBytes", "BucketName", "customer360-prod-raw", "StorageType", "StandardStorage"],
+          ["AWS/S3", "BucketSizeBytes", "BucketName", "customer360-prod-raw", "StorageType", "StandardIAStorage"],
+          ["AWS/S3", "BucketSizeBytes", "BucketName", "customer360-prod-raw", "StorageType", "GlacierStorage"]
+        ],
+        "period": 86400,
+        "stat": "Average",
+        "region": "af-south-1"
+      }
+    }
+  ]
+}
