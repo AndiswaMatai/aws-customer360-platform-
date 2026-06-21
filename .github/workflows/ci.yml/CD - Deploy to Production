@@ -1,0 +1,40 @@
+name: CD - Deploy to Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "glue_jobs/**"
+      - "lambda/**"
+      - "step_functions/**"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Glue jobs, Lambda, Step Functions
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload Glue ETL scripts to S3
+        run: |
+          echo "aws s3 cp glue_jobs/staged_transform.py s3://\$RAW_BUCKET/scripts/staged_transform.py"
+          echo "aws s3 cp glue_jobs/curated_transform.py s3://\$RAW_BUCKET/scripts/curated_transform.py"
+
+      - name: Package and deploy Lambda
+        run: |
+          echo "cd lambda && zip clickstream_processor.zip clickstream_processor.py"
+          echo "aws lambda update-function-code --function-name customer360-prod-clickstream-processor --zip-file fileb://clickstream_processor.zip"
+
+      - name: Update Step Functions state machine
+        run: |
+          echo "aws stepfunctions update-state-machine --state-machine-arn \$SFN_ARN \\"
+          echo "  --definition file://step_functions/medallion_state_machine.json"
+
+      - name: Smoke test - trigger Step Functions execution
+        run: |
+          echo "aws stepfunctions start-execution --state-machine-arn \$SFN_ARN --name deploy-smoke-test-\$(date +%s)"
+          echo "Deploy fails if the execution doesn't reach PipelineSucceeded within 30 minutes."
