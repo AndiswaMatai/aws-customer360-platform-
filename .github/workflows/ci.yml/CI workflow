@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-engine:
+    name: Test local pipeline engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Generate sample data
+        run: python engine/generate_sample_data.py
+      - name: Run full pipeline (raw -> staged -> curated)
+        run: python engine/medallion_pipeline.py
+      - name: Run data quality suite
+        run: python data_quality/run_dq_suite.py
+      - name: Run cost optimization calculator
+        run: python cost_optimization/cost_calculator.py
+
+  validate-json:
+    name: Validate Step Functions / CloudWatch JSON
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate all JSON files
+        run: |
+          for f in $(find step_functions monitoring -name "*.json"); do
+            echo "Validating $f"
+            python3 -m json.tool "$f" > /dev/null
+          done
+
+  lint-glue-jobs:
+    name: Lint Glue/Lambda PySpark + Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install flake8
+        run: pip install flake8
+      - name: Lint Glue jobs and Lambda
+        run: flake8 glue_jobs/ lambda/ --max-line-length=120 --extend-ignore=E501,F821,E402,F403,F405
