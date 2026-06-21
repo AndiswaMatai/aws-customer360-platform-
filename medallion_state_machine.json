@@ -1,0 +1,112 @@
+{
+  "Comment": "Medallion orchestration: crawl raw -> staged transform -> curated transform -> DQ gate. Mirrors the ADF pipeline pl_medallion_refresh.json in the Azure flagship platform, AWS-native equivalent.",
+  "StartAt": "CrawlRawZone",
+  "States": {
+    "CrawlRawZone": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+      "Parameters": {
+        "Name": "customer360-prod-raw-crawler"
+      },
+      "Next": "WaitForCrawler",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ]
+    },
+    "WaitForCrawler": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "RunStagedTransform"
+    },
+    "RunStagedTransform": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "customer360-prod-staged-transform",
+        "Arguments": {
+          "--raw_database": "customer360_raw",
+          "--staged_bucket": "customer360-prod-staged"
+        }
+      },
+      "Next": "RunCuratedTransform",
+      "Retry": [
+        {
+          "ErrorEquals": ["Glue.AWSGlueException"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 1,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure"
+        }
+      ]
+    },
+    "RunCuratedTransform": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "customer360-prod-curated-transform",
+        "Arguments": {
+          "--staged_database": "customer360_staged",
+          "--curated_bucket": "customer360-prod-curated"
+        }
+      },
+      "Next": "RunDataQualityGate",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure"
+        }
+      ]
+    },
+    "RunDataQualityGate": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Comment": "Runs the equivalent of data_quality/run_dq_suite.py as a Glue Python Shell job — same checks, same fail-the-pipeline behaviour.",
+      "Parameters": {
+        "JobName": "customer360-prod-dq-suite"
+      },
+      "Next": "PipelineSucceeded",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyDQFailure"
+        }
+      ]
+    },
+    "PipelineSucceeded": {
+      "Type": "Succeed"
+    },
+    "NotifyFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:af-south-1:ACCOUNT_ID:customer360-prod-alerts",
+        "Message": "Medallion orchestration failed during ETL — see Step Functions execution history.",
+        "Subject": "[ALERT] Customer 360 pipeline failure"
+      },
+      "Next": "PipelineFailed"
+    },
+    "NotifyDQFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:af-south-1:ACCOUNT_ID:customer360-prod-alerts",
+        "Message": "Data quality gate failed — curated layer NOT published to Redshift. Investigate referential integrity / completeness before re-running.",
+        "Subject": "[ALERT] Customer 360 data quality gate failure"
+      },
+      "Next": "PipelineFailed"
+    },
+    "PipelineFailed": {
+      "Type": "Fail"
+    }
+  }
+}
