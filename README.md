@@ -7,74 +7,84 @@
 
 **[← Back to live portfolio](https://andiswamatai.github.io)**
 
-A signature, end-to-end AWS data platform: real-time clickstream via Kinesis + Lambda, batch ETL via Glue, orchestration via Step Functions, and a Customer 360 analytics layer in Redshift Serverless — with the infrastructure, data quality, monitoring, cost optimization, and CI/CD that turn a pipeline into a production platform.
+# ☁️ AWS Customer 360 Platform
 
-This is the AWS counterpart to my Azure/Fabric flagship platform, built to demonstrate the same production-architecture thinking on the other major cloud — directly relevant to the AWS work in my background at Experian (Glue, Lambda, Redshift) and Arena Holdings.
+![Sector](https://img.shields.io/badge/Sector-Ecommerce%20%2F%20Customer%20360-1F3864?style=flat)
+![Cloud](https://img.shields.io/badge/Cloud-AWS-orange?style=flat)
+![Architecture](https://img.shields.io/badge/Architecture-Lakehouse%20%7C%20Streaming%20%7C%20Batch-blue?style=flat)
+![CI/CD](https://img.shields.io/badge/DevOps-Terraform%20%7C%20GitHub%20Actions-purple?style=flat)
 
-## Why this exists
+---
 
-A Customer 360 view is one of the hardest data engineering problems in e-commerce/retail: it requires joining a high-volume, mostly-anonymous real-time clickstream against a much smaller, fully-identified transaction table, at a customer grain, fast enough that marketing and CRM teams can act on it. This repository builds that, with both ingestion paths (batch + streaming) converging into one governed Customer 360 table, and every production concern — cost, monitoring, IaC, CI/CD — built out alongside it, not bolted on afterward.
+## 🚀 Overview
+
+A full end-to-end AWS Customer 360 data platform that unifies real-time clickstream ingestion and batch transaction processing into a single governed analytics model.
+
+The platform combines **Kinesis + Lambda (streaming)** with **AWS Glue (batch ETL)** and orchestrates workloads via **Step Functions**, delivering curated Customer 360 datasets in **Redshift Serverless** for analytics and reporting.
+
+This project demonstrates production-grade AWS data engineering architecture aligned with real-world e-commerce and marketing analytics systems.
+
+---
+
+## 🧠 Why this exists
+
+Customer 360 is one of the most complex problems in modern data engineering:
+
+- High-volume, anonymous clickstream data arrives in real time
+- Structured transaction data arrives in batch form
+- Identity resolution must unify both into a single customer view
+- Latency must remain low enough for marketing and CRM activation
+
+This platform solves that by designing **dual ingestion paths (stream + batch) converging into a single governed analytics layer**.
+---
+## Solutions Overview
+
+This platform implements a cloud-native Customer 360 architecture on AWS.
+
+The system:
+
+- Ingests streaming clickstream events via Kinesis + Lambda
+- Processes batch transactional data via AWS Glue ETL jobs
+- Orchestrates workflows using Step Functions
+- Applies data quality validation before downstream processing
+- Builds a unified Customer 360 dataset in Redshift Serverless
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    subgraph Sources["Source Systems"]
-        WebApp[("Web / Mobile App\nclickstream events")]
-        ERP[("Order Management\nSystem")]
-    end
+``📡 Data Sources
+- Clickstream events (web/app activity)
+- E-commerce transactions
+- Customer interaction logs
 
-    subgraph Streaming["Real-Time Path"]
-        Kinesis["Kinesis Data Stream\n2+ shards"]
-        Lambda["Lambda\nclickstream_processor.py"]
-    end
+        ↓
 
-    subgraph Batch["Batch Path"]
-        Crawler["Glue Crawler\n(schema inference, daily)"]
-    end
+⚡ Streaming Layer
+- Amazon Kinesis
+- AWS Lambda (event batching + preprocessing)
 
-    subgraph Lake["S3 Data Lake"]
-        RawZone[("raw/\nStandard→IA→Glacier")]
-        StagedZone[("staged/\nStandard→IA")]
-        CuratedZone[("curated/\nStandard")]
-    end
+        ↓
 
-    subgraph Orchestration["Step Functions"]
-        SFN["medallion_state_machine.json"]
-        GlueStaged["Glue: staged_transform.py"]
-        GlueCurated["Glue: curated_transform.py"]
-        DQGate["DQ Gate\n(run_dq_suite equivalent)"]
-    end
+📦 Batch Processing Layer
+- AWS Glue ETL Jobs
+- Scheduled ingestion of structured data
 
-    subgraph Analytics["Analytics Layer"]
-        Redshift[("Redshift Serverless\n+ Spectrum")]
-        BI["QuickSight / Power BI"]
-    end
+        ↓
 
-    subgraph Ops["Platform Operations"]
-        Terraform["Terraform IaC"]
-        CloudWatch["CloudWatch Alarms\n+ Dashboard"]
-        Cost["Cost Optimization\nlifecycle + bookmarking + serverless"]
-        CICD["GitHub Actions\nCI / Terraform Plan / CD"]
-    end
+🎼 Orchestration Layer
+- AWS Step Functions
+- Pipeline coordination + data quality gate
 
-    WebApp -->|events| Kinesis --> Lambda --> RawZone
-    ERP -->|daily extract| RawZone
-    RawZone --> Crawler
-    SFN --> Crawler
-    SFN --> GlueStaged --> StagedZone
-    SFN --> GlueCurated --> CuratedZone
-    SFN --> DQGate
-    CuratedZone -->|Spectrum, zero-copy| Redshift --> BI
+        ↓
 
-    Terraform -.provisions.-> Lake
-    Terraform -.provisions.-> Streaming
-    Terraform -.provisions.-> Orchestration
-    Terraform -.provisions.-> Analytics
-    CloudWatch -.watches.-> Orchestration
-    CloudWatch -.watches.-> Streaming
-    CICD -.deploys.-> Orchestration
-    CICD -.deploys.-> Streaming
+🥇 Curated Layer
+- S3 (Parquet datasets)
+- Cleaned + conformed Customer 360 model
+
+        ↓
+
+📊 Analytics Layer
+- Amazon Redshift Serverless
+- Spectrum external tables for zero-copy analytics
 ```
 
 ## What's actually runnable vs. what's reference architecture
@@ -107,21 +117,21 @@ tests/                    Unit tests for engine + DQ framework
 .github/workflows/        CI, Terraform Plan, CD
 ```
 
-## Running the local pipeline
+## Why Both Real & Streaming 
 
-```bash
-pip install -r requirements.txt
-python engine/generate_sample_data.py     # ~10s, ~933K rows
-python engine/medallion_pipeline.py       # ~10s, full raw→staged→curated
-python data_quality/run_dq_suite.py       # DQ gate — same checks as production
-python cost_optimization/cost_calculator.py
-```
+This architecture intentionally combines both ingestion patterns:
 
-Run the tests:
+### 🟦 Batch (Glue)
+- Daily structured transaction ingestion
+- Cost-efficient ETL processing
+- Ideal for stable, known datasets
 
-```bash
-python -m unittest discover -s tests -v
-```
+### ⚡ Streaming (Kinesis + Lambda)
+- High-volume clickstream ingestion (~700K+ events)
+- Near real-time behavioural tracking
+- Micro-batching to reduce Lambda invocation cost
+
+Both pipelines converge into a unified Customer 360 model in S3 and Redshift.
 
 ## Sample Output
 
@@ -146,23 +156,39 @@ COST OPTIMIZATION:
   TOTAL ESTIMATED ANNUAL SAVINGS:  $9,855.22
 ```
 
-## Why both a batch and streaming path
+## 🧠 Engineering Design Principles
 
-Order/transaction data updates at business pace — a daily Glue Crawler scan plus scheduled ETL is the right cost/complexity tradeoff. Clickstream is different: 700K+ events covering page views, cart adds, and checkout starts, the majority from anonymous (not-yet-identified) visitors. That volume and arrival pattern is what Kinesis + Lambda is built for — batching up to 500 records or 30 seconds (whichever comes first) before a single S3 write, instead of either a 700K-row daily batch job or 700K individual Lambda invocations.
+This platform demonstrates:
 
-## Production readiness checklist
+- Lambda-based event-driven ingestion
+- Batch + streaming hybrid architecture
+- Idempotent ETL via Glue bookmarking
+- Event-driven orchestration using Step Functions
+- Data lake architecture using S3 (Parquet format)
+- Zero-copy analytics using Redshift Spectrum
+- Infrastructure-as-Code (Terraform)
+- CI/CD-driven deployment lifecycle
+- Cost-aware cloud engineering design
 
-- [x] Infrastructure as Code (Terraform, environment-separated via `.tfvars`)
-- [x] CI/CD (GitHub Actions: test → plan → deploy, with a DQ smoke test gate)
-- [x] Data quality enforced as a Step Functions gate, not an afterthought
-- [x] Monitoring & alerting (4 distinct CloudWatch alarms, tiered by what they signal)
-- [x] Cost optimization (S3 tiering, Glue bookmarking, Redshift Serverless, Lambda batching — all measured)
-- [x] IAM least-privilege roles per service (Glue, Lambda, Step Functions, EventBridge)
-- [x] S3 public access blocked + SSE encryption by default on every bucket
-- [x] Real-time + batch ingestion paths, converging into one staged/curated layer
-- [x] Job bookmarking for idempotent, incremental ETL — never reprocesses unchanged data
-- [x] Redshift Spectrum for zero-copy analytics querying directly off curated Parquet
+## Business Value
 
-## License
+This system enables organisations to:
 
-MIT — all data is synthetic.
+- Build a unified Customer 360 view across all channels
+- Enable real-time marketing and behavioural analytics
+- Improve conversion tracking accuracy
+- Reduce infrastructure costs through optimisation
+- Support scalable analytics on millions of events
+
+## Production Enhancement
+
+If deployed in enterprise AWS environments:
+
+- Kinesis Data Streams for real-time ingestion scaling
+- AWS Glue Crawlers for automated schema discovery
+- Step Functions for resilient workflow orchestration
+- S3 data lake with lifecycle policies (Bronze/Silver/Gold)
+- Redshift Serverless for scalable analytics queries
+- CloudWatch for observability and alerting
+- IAM least-privilege role-based security model
+- Terraform for full infrastructure lifecycle management
