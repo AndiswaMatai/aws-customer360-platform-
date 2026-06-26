@@ -103,7 +103,6 @@ The system:
 | `.github/workflows/cd.yml` | **Documents the real deployment commands**, doesn't execute against live infra |
 
 ## Repository Structure
-
 ```
 engine/                  Local-runnable pipeline (raw → staged → curated)
 glue_jobs/                Production PySpark ETL scripts (1:1 mirror of engine/)
