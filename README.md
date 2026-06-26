@@ -85,7 +85,7 @@ The system:
 📊 Analytics Layer
 - Amazon Redshift Serverless
 - Spectrum external tables for zero-copy analytics
-```
+
 
 ## What's actually runnable vs. what's reference architecture
 
